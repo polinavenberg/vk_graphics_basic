@@ -4,6 +4,9 @@
 #include <vk_buffers.h>
 #include <vk_utils.h>
 
+#include <random>
+#include <chrono>
+
 SimpleCompute::SimpleCompute(uint32_t a_length) : m_length(a_length)
 {
 #ifdef NDEBUG
@@ -95,15 +98,13 @@ void SimpleCompute::SetupSimplePipeline()
   m_pBindings->BindEnd(&m_sumDS, &m_sumDSLayout);
 
   // Заполнение буферов
-  std::vector<float> values(m_length);
+  std::vector<float> values(m_length, 0);
+  m_pCopyHelper->UpdateBuffer(m_B, 0, values.data(), sizeof(float) * values.size());
+
   for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i;
+    values[i] = -1e6 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2e6)));
   }
   m_pCopyHelper->UpdateBuffer(m_A, 0, values.data(), sizeof(float) * values.size());
-  for (uint32_t i = 0; i < values.size(); ++i) {
-    values[i] = (float)i * i;
-  }
-  m_pCopyHelper->UpdateBuffer(m_B, 0, values.data(), sizeof(float) * values.size());
 }
 
 void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline)
@@ -217,15 +218,49 @@ void SimpleCompute::Execute()
   fenceCreateInfo.flags = 0;
   VK_CHECK_RESULT(vkCreateFence(m_device, &fenceCreateInfo, NULL, &m_fence));
 
+  auto start_time = std::chrono::high_resolution_clock::now();
   // Отправляем буфер команд на выполнение
   VK_CHECK_RESULT(vkQueueSubmit(m_computeQueue, 1, &submitInfo, m_fence));
 
   //Ждём конца выполнения команд
   VK_CHECK_RESULT(vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, 100000000000));
-
+  auto end_time = std::chrono::high_resolution_clock::now();
+  
   std::vector<float> values(m_length);
   m_pCopyHelper->ReadBuffer(m_sum, 0, values.data(), sizeof(float) * values.size());
+
+  float sum = 0.;
   for (auto v: values) {
-    std::cout << v << ' ';
+    sum += v;
   }
+  std::cout << "GPU" << std::endl;
+  std::cout << "sum: " << sum << std::endl;
+  std::cout << "time: " << (end_time - start_time)/std::chrono::milliseconds(1) << " ms" << std::endl;
+
+
+  std::vector<float> A(m_length);
+  std::vector<float> B(m_length, 0);
+  for (uint32_t i = 0; i < m_length; ++i) {
+    A[i] = -1e6 + static_cast<float>(rand()) /(static_cast<float>(RAND_MAX/(2e6)));
+  }
+
+  start_time = std::chrono::high_resolution_clock::now();
+  for (int idx = 0; idx < m_length; ++idx) {
+    for (int shift = -3; shift <= 3; ++shift) {
+      if (0 <= idx + shift && idx + shift < m_length) {
+          B[idx] += A[idx + shift] / 7.;
+      }
+    }
+  }
+  end_time = std::chrono::high_resolution_clock::now();
+
+  sum = 0.;
+  for (int i = 0; i < m_length; i++)
+  {
+    sum += A[i] - B[i];
+  }
+  
+  std::cout << "CPU" << std::endl;
+  std::cout << "sum: " << sum << std::endl;
+  std::cout << "time: " << (end_time - start_time)/std::chrono::milliseconds(1) << " ms" << std::endl;
 }

@@ -24,7 +24,12 @@ layout(std430, binding = 2) buffer Sum
 void main() 
 {
     uint idx = gl_GlobalInvocationID.x;
+    for (int shift = -3; shift <= 3; ++shift) {
+        if (0 <= idx + shift && idx + shift < PushConstant.len) {
+            B[idx] += A[idx + shift] / 7.;
+        }
+    }
     if (idx < PushConstant.len) {
-        sum[idx] = A[idx] + B[idx];
+        sum[idx] = A[idx] - B[idx];
     }
 }
