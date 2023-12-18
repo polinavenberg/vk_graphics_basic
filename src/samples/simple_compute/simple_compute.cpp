@@ -104,6 +104,7 @@ void SimpleCompute::SetupSimplePipeline()
   for (uint32_t i = 0; i < values.size(); ++i) {
     values[i] = -1e6 + static_cast <float> (rand()) /( static_cast <float> (RAND_MAX/(2e6)));
   }
+  rand_values = values;
   m_pCopyHelper->UpdateBuffer(m_A, 0, values.data(), sizeof(float) * values.size());
 }
 
@@ -123,7 +124,7 @@ void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeli
 
   vkCmdPushConstants(a_cmdBuff, m_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(m_length), &m_length);
 
-  vkCmdDispatch(a_cmdBuff, 1, 1, 1);
+  vkCmdDispatch(a_cmdBuff, 1 + (m_length - 1) / 32, 1, 1);
 
   VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff));
 }
@@ -238,17 +239,12 @@ void SimpleCompute::Execute()
   std::cout << "time: " << (end_time - start_time)/std::chrono::milliseconds(1) << " ms" << std::endl;
 
 
-  std::vector<float> A(m_length);
   std::vector<float> B(m_length, 0);
-  for (uint32_t i = 0; i < m_length; ++i) {
-    A[i] = -1e6 + static_cast<float>(rand()) /(static_cast<float>(RAND_MAX/(2e6)));
-  }
-
   start_time = std::chrono::high_resolution_clock::now();
   for (int idx = 0; idx < m_length; ++idx) {
     for (int shift = -3; shift <= 3; ++shift) {
       if (0 <= idx + shift && idx + shift < m_length) {
-          B[idx] += A[idx + shift] / 7.;
+          B[idx] += rand_values[idx + shift] / 7.;
       }
     }
   }
@@ -257,7 +253,7 @@ void SimpleCompute::Execute()
   sum = 0.;
   for (int i = 0; i < m_length; i++)
   {
-    sum += A[i] - B[i];
+    sum += rand_values[i] - B[i];
   }
   
   std::cout << "CPU" << std::endl;
